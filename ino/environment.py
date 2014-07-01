@@ -8,6 +8,7 @@ import pickle
 import platform
 import hashlib
 import re
+from serial.tools.list_ports import comports
 
 try:
     from collections import OrderedDict
@@ -67,22 +68,29 @@ class Version(namedtuple('Version', 'major minor build')):
 class Environment(dict):
 
     templates_dir = os.path.join(os.path.dirname(__file__), 'templates')
-    output_dir = '.build'
+    output_dir = '.build_' + sys.platform
     src_dir = 'src'
     lib_dir = 'lib'
     hex_filename = 'firmware.hex'
 
     arduino_dist_dir = None
-    arduino_dist_dir_guesses = [
-        '/usr/local/share/arduino',
-        '/usr/share/arduino',
-    ]
+    arduino_dist_dir_guesses = []
 
-    if platform.system() == 'Darwin':
-        arduino_dist_dir_guesses.insert(0, '/Applications/Arduino.app/Contents/Resources/Java')
+    if platform.system().startswith('CYGWIN'):
+      arduino_dist_dir_guesses.insert(0, '/cygdrive/c/Arduino')
+    elif platform.system() == 'Windows':
+      arduino_dist_dir_guesses.insert(0, 'c:\\Arduino')
+    elif platform.system() == 'Darwin':
+      arduino_dist_dir_guesses.insert(0, '/Applications/Arduino.app/Contents/Resources/Java')
+    else:
+      arduino_dist_dir_guesses = [
+          '/usr/local/share/arduino',
+          '/usr/share/arduino',
+      ]
 
-    default_board_model = 'uno'
-    ino = sys.argv[0]
+    default_board_model = 'promicro16'
+    ino = os.path.abspath(sys.argv[0])
+    ino = os.path.relpath(ino, os.getcwd())
 
     def dump(self):
         if not os.path.isdir(self.output_dir):
@@ -141,19 +149,35 @@ class Environment(dict):
 
         human_name = human_name or key
 
+        # make sure search on current directy first
+        #places.insert(0,'.') 
+        
         # expand env variables in `places` and split on colons
         places = itertools.chain.from_iterable(os.path.expandvars(p).split(os.pathsep) for p in places)
         places = map(os.path.expanduser, places)
 
-        glob_places = itertools.chain.from_iterable(glob(p) for p in places)
-        
+        glob_places = itertools.chain.from_iterable(glob(os.path.abspath(p)) for p in places)
+
         print 'Searching for', human_name, '...',
+        test_func = os.path.isfile if join else os.path.exists
         results = []
         for p in glob_places:
             for i in items:
                 path = os.path.join(p, i)
                 if os.path.exists(path):
                     result = path if join else p
+
+                    #KHAI: Convert to relative path for compatible with
+                    #      windows and Linux system
+                    result = os.path.abspath(result)
+                    result = os.path.relpath(result, os.getcwd())
+                    
+                    #KHAI added for convert window path to Linux path for
+                    #     make.exe work in window
+                    if platform.system() == "Windows":
+                      result = result.split('\\')
+                      result = '/'.join(result)
+
                     if not multi:
                         print colorize(result, 'green')
                         self[key] = result
@@ -260,6 +284,18 @@ class Environment(dict):
                     # paths relative to a core directory of a specific board model
                     self['board_models'][multikey[0]]['_coredir'] = os.path.dirname(boards_txt)
 
+        # Convert core and variant path in Arduino specification to system
+        # paths
+        subdict = self['board_models']
+        for model in subdict:
+          if 'build' in subdict[model]:
+            modeldict = subdict[model]['build']
+            for val, dir in (('core','cores'), ('variant','variants')):
+              if val in modeldict:
+                a, b, c = modeldict[val].partition(':')
+                if b==':':
+                  modeldict[val] = os.path.join('..', '..', a, dir, c)
+
         return self['board_models']
 
     def board_model(self, key):
@@ -285,27 +321,50 @@ class Environment(dict):
             return ['/dev/ttyACM*', '/dev/ttyUSB*']
         if system == 'Darwin':
             return ['/dev/tty.usbmodem*', '/dev/tty.usbserial*']
+        elif system.startswith('CYGWIN'):
+            return ['/dev/ttyS*']
         raise NotImplementedError("Not implemented for Windows")
 
-    def list_serial_ports(self):
+    def list_serial_ports(self, serial_port=None):
         ports = []
-        for p in self.serial_port_patterns():
-            matches = glob(p)
-            ports.extend(matches)
+
+        for p, desc, hwid in comports():
+          if hwid.startswith('USB'):
+            if (serial_port==p):
+              ports.insert(0, (p,"%s: %s" % (p, desc)))
+            elif serial_port is None:
+              if desc.startswith('Teensy'):
+                ports.insert(0, (p,"%s: %s" % (p, desc)))
+              else:
+                ports.append((p,"%s: %s" % (p, desc)))
+        
+        if platform.system() != "Windows":
+          for p in self.serial_port_patterns():
+              matches = glob(p)
+              for m in matches:
+                if m==serial_port:
+                  ports.insert(0, (m,'%s' % m))
+                elif serial_port is None:
+                  ports.append((m,'%s' % m))
+
         return ports
 
-    def guess_serial_port(self):
-        print 'Guessing serial port ...',
+    def guess_serial_port(self, serial_port=None):
+        if serial_port is None:
+          print 'Guessing serial port ...',
+        else:
+          print 'Check serial port %s ...' % serial_port,
 
-        ports = self.list_serial_ports()
+        ports = self.list_serial_ports(serial_port)
         if ports:
             result = ports[0]
-            print colorize(result, 'yellow')
+            print colorize(ports[0][1], 'yellow')
             return result
 
         print colorize('FAILED', 'red')
-        raise Abort("No device matching following was found: %s" %
-                    (''.join(['\n  - ' + p for p in self.serial_port_patterns()])))
+        return None
+        #raise Abort("No device matching following was found: %s" %
+        #            (''.join(['\n  - ' + p for p in self.serial_port_patterns()])))
 
     def process_args(self, args):
         arduino_dist = getattr(args, 'arduino_dist', None)

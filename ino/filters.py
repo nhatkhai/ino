@@ -4,6 +4,7 @@ import sys
 import os.path
 import fnmatch
 import functools
+import platform
 
 from ino.utils import FileMap, SpaceList
 
@@ -98,6 +99,9 @@ def libmap(source_dirs, target_dir):
 
 @filter
 def colorize(s, color):
+    if platform.system() == 'Windows':
+        return s
+
     if not sys.stdout.isatty():
         return s
 
@@ -106,7 +110,7 @@ def colorize(s, color):
         'purple':   '95',
         'blue':     '94',
         'green':    '92',
-        'yellow':   '93',
+        'yellow':   '33', # Too hard to see on the white background terminal
         'red':      '91',
     }
 

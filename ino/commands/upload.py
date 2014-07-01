@@ -36,20 +36,26 @@ class Upload(Command):
         self.e.add_arduino_dist_arg(parser)
 
     def discover(self):
-        self.e.find_tool('stty', ['stty'])
         if platform.system() == 'Linux':
+            self.e.find_tool('stty', ['stty'])
             self.e.find_arduino_tool('avrdude', ['hardware', 'tools'])
 
             conf_places = self.e.arduino_dist_places(['hardware', 'tools'])
             conf_places.append('/etc/avrdude') # fallback to system-wide conf on Fedora
             self.e.find_file('avrdude.conf', places=conf_places)
+
+        elif platform.system()== 'Windows':
+            self.e.find_arduino_tool('avrdude.exe', ['hardware', 'tools', 'avr', 'bin'])
+            self.e.find_arduino_file('avrdude.conf', ['hardware', 'tools', 'avr', 'etc'])
         else:
+            self.e.find_tool('stty', ['stty'])
             self.e.find_arduino_tool('avrdude', ['hardware', 'tools', 'avr', 'bin'])
             self.e.find_arduino_file('avrdude.conf', ['hardware', 'tools', 'avr', 'etc'])
     
     def run(self, args):
         self.discover()
-        port = args.serial_port or self.e.guess_serial_port()
+
+        port = self.e.guess_serial_port(args.serial_port)
         board = self.e.board_model(args.board_model)
 
         protocol = board['upload']['protocol']
@@ -58,18 +64,19 @@ class Upload(Command):
             # try v2 first and fail
             protocol = 'stk500v1'
 
-        if not os.path.exists(port):
-            raise Abort("%s doesn't exist. Is Arduino connected?" % port)
+        if port is None:
+            raise Abort("%s doesn't exist. Is Arduino connected?" % args.serial_port)
 
-        # send a hangup signal when the last process closes the tty
-        file_switch = '-f' if platform.system() == 'Darwin' else '-F'
-        ret = subprocess.call([self.e['stty'], file_switch, port, 'hupcl'])
-        if ret:
-            raise Abort("stty failed")
+        if 'stty' in self.e:
+          # send a hangup signal when the last process closes the tty
+          file_switch = '-f' if platform.system() == 'Darwin' else '-F'
+          ret = subprocess.call([self.e['stty'], file_switch, port[0], 'hupcl'])
+          if ret:
+              raise Abort("stty failed")
 
         # pulse on DTR
         try:
-            s = Serial(port, 115200)
+            s = Serial(port[0])
         except SerialException as e:
             raise Abort(str(e))
         s.setDTR(False)
@@ -92,7 +99,7 @@ class Upload(Command):
             before = self.e.list_serial_ports()
             if port in before:
                 ser = Serial()
-                ser.port = port
+                ser.port = port[0]
                 ser.baudrate = 1200
                 ser.open()
                 ser.close()
@@ -124,13 +131,15 @@ class Upload(Command):
                             "button after initiating the upload.")
 
             port = new_port
+        if platform.system().startswith("CYGWIN"):
+          port = ('COM' + str(int(port[0][9:])+1), port[1])
 
         # call avrdude to upload .hex
         subprocess.call([
-            self.e['avrdude'],
+            self.e['avrdude'] if 'avrdude' in self.e else self.e['avrdude.exe'],
             '-C', self.e['avrdude.conf'],
             '-p', board['build']['mcu'],
-            '-P', port,
+            '-P', port[0],
             '-c', protocol,
             '-b', board['upload']['speed'],
             '-D',
