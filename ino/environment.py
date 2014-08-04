@@ -9,6 +9,7 @@ import platform
 import hashlib
 import re
 from serial.tools.list_ports import comports
+import serial
 
 try:
     from collections import OrderedDict
@@ -322,30 +323,32 @@ class Environment(dict):
         if system == 'Darwin':
             return ['/dev/tty.usbmodem*', '/dev/tty.usbserial*']
         elif system.startswith('CYGWIN'):
-            return ['/dev/ttyS*']
-        raise NotImplementedError("Not implemented for Windows")
+            return []
+        elif system == 'Windows':
+            return []
+        raise NotImplementedError("Not implemented for %s" % system)
 
     def list_serial_ports(self, serial_port=None):
         ports = []
 
         for p, desc, hwid in comports():
           if hwid.startswith('USB'):
-            if (serial_port==p):
+            if (serial_port==str(p)):
               ports.insert(0, (p,"%s: %s" % (p, desc)))
             elif serial_port is None:
-              if desc.startswith('Teensy'):
+              if (   desc.startswith('Teensy USB Serial')
+                  or desc.startswith('Sparkfun Pro Micro')):
                 ports.insert(0, (p,"%s: %s" % (p, desc)))
               else:
                 ports.append((p,"%s: %s" % (p, desc)))
         
-        if platform.system() != "Windows":
-          for p in self.serial_port_patterns():
-              matches = glob(p)
-              for m in matches:
-                if m==serial_port:
-                  ports.insert(0, (m,'%s' % m))
-                elif serial_port is None:
-                  ports.append((m,'%s' % m))
+        for p in self.serial_port_patterns():
+            matches = glob(p)
+            for m in matches:
+              if m==serial_port:
+                ports.insert(0, (m,'%s' % m))
+              elif serial_port is None:
+                ports.append((m,'%s' % m))
 
         return ports
 

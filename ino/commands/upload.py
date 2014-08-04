@@ -47,6 +47,11 @@ class Upload(Command):
         elif platform.system()== 'Windows':
             self.e.find_arduino_tool('avrdude.exe', ['hardware', 'tools', 'avr', 'bin'])
             self.e.find_arduino_file('avrdude.conf', ['hardware', 'tools', 'avr', 'etc'])
+
+        elif platform.system().startswith('CYGWIN'):
+            self.e.find_arduino_tool('avrdude', ['hardware', 'tools', 'avr', 'bin'])
+            self.e.find_arduino_file('avrdude.conf', ['hardware', 'tools', 'avr', 'etc'])
+
         else:
             self.e.find_tool('stty', ['stty'])
             self.e.find_arduino_tool('avrdude', ['hardware', 'tools', 'avr', 'bin'])
@@ -57,7 +62,6 @@ class Upload(Command):
 
         port = self.e.guess_serial_port(args.serial_port)
         board = self.e.board_model(args.board_model)
-
         protocol = board['upload']['protocol']
         if protocol == 'stk500':
             # if v1 is not specifid explicitly avrdude will
@@ -76,7 +80,7 @@ class Upload(Command):
 
         # pulse on DTR
         try:
-            s = Serial(port[0])
+            s = Serial(port[0], 115200)
         except SerialException as e:
             raise Abort(str(e))
         s.setDTR(False)
@@ -131,8 +135,9 @@ class Upload(Command):
                             "button after initiating the upload.")
 
             port = new_port
-        if platform.system().startswith("CYGWIN"):
-          port = ('COM' + str(int(port[0][9:])+1), port[1])
+
+        print "Used %s for programming." % port[0]
+        print "Used %s protocol" % protocol
 
         # call avrdude to upload .hex
         subprocess.call([

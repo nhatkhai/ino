@@ -190,7 +190,10 @@ class Build(Command):
         if self.e.arduino_lib_version.major:
             variant_dir = self.e.arduino_variants_dir
             self.e.cppflags.append('-I' + variant_dir)
-
+        
+        self.e.cppflags.append('-I' + self.e.src_dir)
+        self.e.cppflags.append('-I' + self.e.lib_dir)
+        
         self.e['cflags'] = SpaceList(shlex.split(args.cflags))
         self.e['cxxflags'] = SpaceList(shlex.split(args.cxxflags))
 

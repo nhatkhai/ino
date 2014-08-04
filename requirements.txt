@@ -1,6 +1,12 @@
-jinja2
-pyserial
-configobj
+# Third-party module not installed with python installation
+Jinja2        #last used version 2.7.3
+pyserial      #last used version 2.7
+configobj     #last used version 5.0.5
+glob2         #last used version 0.4.1
+setuptools    #last used version 5.1
+six           #last used version 1.7.2
+
+# Modules installed with python installation
 ordereddict
 argparse
-glob2
+
