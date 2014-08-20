@@ -79,8 +79,16 @@ class Environment(dict):
 
     if platform.system().startswith('CYGWIN'):
       arduino_dist_dir_guesses.insert(0, '/cygdrive/c/Arduino')
+      arduino_dist_dir_guesses.insert(0, '/cygdrive/c/Progra~1/Arduino')
+      arduino_dist_dir_guesses.insert(0, '/cygdrive/c/Progra~2/Arduino')
+      arduino_dist_dir_guesses.insert(0, '/cygdrive/c/Progra~3/Arduino')
+      arduino_dist_dir_guesses.insert(0, '/cygdrive/c/Progra~4/Arduino')
     elif platform.system() == 'Windows':
       arduino_dist_dir_guesses.insert(0, 'c:\\Arduino')
+      arduino_dist_dir_guesses.insert(0, 'c:\\Progra~1\\Arduino')
+      arduino_dist_dir_guesses.insert(0, 'c:\\Progra~2\\Arduino')
+      arduino_dist_dir_guesses.insert(0, 'c:\\Progra~3\\Arduino')
+      arduino_dist_dir_guesses.insert(0, 'c:\\Progra~4\\Arduino')
     elif platform.system() == 'Darwin':
       arduino_dist_dir_guesses.insert(0, '/Applications/Arduino.app/Contents/Resources/Java')
     else:
@@ -91,7 +99,7 @@ class Environment(dict):
 
     default_board_model = 'promicro16'
     ino = os.path.abspath(sys.argv[0])
-    ino = os.path.relpath(ino, os.getcwd())
+    ino = 'python ' + os.path.relpath(ino, os.getcwd())
 
     def dump(self):
         if not os.path.isdir(self.output_dir):

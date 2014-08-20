@@ -1,7 +1,32 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# run following command to install this module:
+#   python setup.py install
+#
+# run following command to uninstall this module:
+#   python setup.py uninstall
+# OR
+#   cat install_*.txt | xargs rm -vrf 
 
 from setuptools import setup
+import sys
+
+# Check for uninstall in argument and do uninstall
+i=0
+for e in sys.argv:
+    if e=='uninstall':
+        print "running uninstall"
+        import glob
+        import os
+        for a in glob.glob('install_*_%s.txt' % sys.platform):
+            for f in file(a).read().split('\n'):
+                if os.path.isfile(f):
+                    print "Remove ", f
+                    os.remove(f)
+        sys.argv.pop(i)
+    else:
+        i += 1
+if len(sys.argv)<=1: quit()
 
 install_requires = open("requirements.txt").read().split('\n')
 readme_content = open("README.rst").read()
@@ -15,9 +40,25 @@ def gen_data_files(package_dir, subdir):
 
 ino_package_data = gen_data_files('ino', 'make') + gen_data_files('ino', 'templates')
 
+
+# Look for install and --record install_*.txt file into argument for
+# installation record
+__version__ = '0.3.8'
+for i, e in enumerate(sys.argv):
+    if e=='install':
+        # Import to verify all dependencies are satisfy, and obtain __version__
+        try:
+            import ino.runner
+            sys.argv.insert(i+1,'--record')
+            sys.argv.insert(i+2,'install_%s_%s.txt' % (__version__, sys.platform))
+        except ImportError as e:
+            print "Require module is not found: ", e.message
+            quit()
+        break
+
 setup(
     name='ino',
-    version='0.3.7',
+    version=__version__,
     description='Command line toolkit for working with Arduino hardware',
     long_description=readme_content,
     author='Victor Nakoryakov, Amperka Team',
